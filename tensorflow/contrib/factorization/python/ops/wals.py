@@ -19,8 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.contrib.factorization.python.ops import factorization_ops
-from tensorflow.contrib.learn.python.learn.estimators import estimator
-from tensorflow.contrib.learn.python.learn.estimators import model_fn
+from tensorflow.estimator import ModeKeys, Estimator, EstimatorSpec
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
@@ -145,7 +144,7 @@ def _wals_factorization_model_function(features, labels, mode, params):
   Args:
     features: Dictionary of features. See WALSMatrixFactorization.
     labels: Must be None.
-    mode: A model_fn.ModeKeys object.
+    mode: A ModeKeys object.
     params: Dictionary of parameters containing arguments passed to the
       WALSMatrixFactorization constructor.
 
@@ -157,9 +156,9 @@ def _wals_factorization_model_function(features, labels, mode, params):
   """
   assert labels is None
   use_factors_weights_cache = (params["use_factors_weights_cache_for_training"]
-                               and mode == model_fn.ModeKeys.TRAIN)
+                               and mode == ModeKeys.TRAIN)
   use_gramian_cache = (params["use_gramian_cache_for_training"] and
-                       mode == model_fn.ModeKeys.TRAIN)
+                       mode == ModeKeys.TRAIN)
   max_sweeps = params["max_sweeps"]
   model = factorization_ops.WALSModel(
       params["num_rows"],
@@ -182,7 +181,7 @@ def _wals_factorization_model_function(features, labels, mode, params):
   input_cols = features[WALSMatrixFactorization.INPUT_COLS]
 
   # TRAIN mode:
-  if mode == model_fn.ModeKeys.TRAIN:
+  if mode == ModeKeys.TRAIN:
     # Training consists of the following ops (controlled using a SweepHook).
     # Before a row sweep:
     #   row_update_prep_gramian_op
@@ -306,8 +305,8 @@ def _wals_factorization_model_function(features, labels, mode, params):
     if max_sweeps is not None:
       training_hooks.append(_StopAtSweepHook(max_sweeps))
 
-    return model_fn.ModelFnOps(
-        mode=model_fn.ModeKeys.TRAIN,
+    return EstimatorSpec(
+        mode=ModeKeys.TRAIN,
         predictions={},
         loss=loss_var,
         eval_metric_ops={},
@@ -315,7 +314,7 @@ def _wals_factorization_model_function(features, labels, mode, params):
         training_hooks=training_hooks)
 
   # INFER mode
-  elif mode == model_fn.ModeKeys.INFER:
+  elif mode == ModeKeys.INFER:
     projection_weights = features.get(
         WALSMatrixFactorization.PROJECTION_WEIGHTS)
 
@@ -338,8 +337,8 @@ def _wals_factorization_model_function(features, labels, mode, params):
             get_col_projection)
     }
 
-    return model_fn.ModelFnOps(
-        mode=model_fn.ModeKeys.INFER,
+    return EstimatorSpec(
+        mode=ModeKeys.INFER,
         predictions=predictions,
         loss=None,
         eval_metric_ops={},
@@ -347,7 +346,7 @@ def _wals_factorization_model_function(features, labels, mode, params):
         training_hooks=[])
 
   # EVAL mode
-  elif mode == model_fn.ModeKeys.EVAL:
+  elif mode == ModeKeys.EVAL:
     def get_row_loss():
       _, _, loss, reg, _ = model.update_row_factors(
           sp_input=input_rows, transpose_input=False)
@@ -360,8 +359,8 @@ def _wals_factorization_model_function(features, labels, mode, params):
         features[WALSMatrixFactorization.PROJECT_ROW],
         get_row_loss,
         get_col_loss)
-    return model_fn.ModelFnOps(
-        mode=model_fn.ModeKeys.EVAL,
+    return EstimatorSpec(
+        mode=ModeKeys.EVAL,
         predictions={},
         loss=loss,
         eval_metric_ops={},
@@ -372,7 +371,7 @@ def _wals_factorization_model_function(features, labels, mode, params):
     raise ValueError("mode=%s is not recognized." % str(mode))
 
 
-class WALSMatrixFactorization(estimator.Estimator):
+class WALSMatrixFactorization(Estimator):
   """An Estimator for Weighted Matrix Factorization, using the WALS method.
 
   WALS (Weighted Alternating Least Squares) is an algorithm for weighted matrix
